@@ -49,14 +49,14 @@ function TakeTurnState:enter(params)
         end
 
         self:attack(self.secondPokemon, self.firstPokemon, self.secondSprite, self.firstSprite, self.secondBar, self.firstBar,
-    
+
         function()
 
             -- remove the message
             gStateStack:pop()
 
             -- check to see whether the player or enemy died
-            if self:checkDeaths() then 
+            if self:checkDeaths() then
                 gStateStack:pop()
                 return
             end
@@ -69,7 +69,7 @@ function TakeTurnState:enter(params)
 end
 
 function TakeTurnState:attack(attacker, defender, attackerSprite, defenderSprite, attackerkBar, defenderBar, onEnd)
-    
+
     -- first, push a message saying who's attacking, then flash the attacker
     -- this message is not allowed to take input at first, so it stays on the stack
     -- during the animation
@@ -78,7 +78,7 @@ function TakeTurnState:attack(attacker, defender, attackerSprite, defenderSprite
 
     -- pause for half a second, then play attack animation
     Timer.after(0.5, function()
-        
+
         -- attack sound
         gSounds['powerup']:stop()
         gSounds['powerup']:play()
@@ -89,7 +89,7 @@ function TakeTurnState:attack(attacker, defender, attackerSprite, defenderSprite
         end)
         :limit(6)
         :finish(function()
-            
+
             -- after finishing the blink, play a hit sound and flash the opacity of
             -- the defender a few times
             gSounds['hit']:stop()
@@ -100,10 +100,10 @@ function TakeTurnState:attack(attacker, defender, attackerSprite, defenderSprite
             end)
             :limit(6)
             :finish(function()
-                
+
                 -- shrink the defender's health bar over half a second, doing at least 1 dmg
                 local dmg = math.max(1, attacker.attack - defender.defense)
-                
+
                 Timer.tween(0.5, {
                     [defenderBar] = {value = defender.currentHP - dmg}
                 })
@@ -135,10 +135,10 @@ function TakeTurnState:faint()
         [self.playerSprite] = {y = VIRTUAL_HEIGHT}
     })
     :finish(function()
-        
+
         -- when finished, push a loss message
         gStateStack:push(BattleMessageState('You fainted!',
-    
+
         function()
 
             -- fade in black
@@ -146,19 +146,19 @@ function TakeTurnState:faint()
                 r = 0, g = 0, b = 0
             }, 1,
             function()
-                
+
                 -- restore player pokemon to full health
                 self.playerPokemon.currentHP = self.playerPokemon.HP
 
                 -- resume field music
                 gSounds['battle-music']:stop()
                 gSounds['field-music']:play()
-                
+
                 -- pop off the battle state and back into the field
                 gStateStack:pop()
                 gStateStack:push(FadeOutState({
                     r = 0, g = 0, b = 0
-                }, 1, function() 
+                }, 1, function()
                     gStateStack:push(DialogueState('Your Pokemon has been fully restored; try again!'))
                 end))
             end))
@@ -181,12 +181,12 @@ function TakeTurnState:victory()
 
         -- when finished, push a victory message
         gStateStack:push(BattleMessageState('Victory!',
-        
+
         function()
 
             -- sum all IVs and multiply by level to get exp amount
             local exp = (self.opponentPokemon.HPIV + self.opponentPokemon.attackIV +
-                self.opponentPokemon.defenseIV + self.opponentPokemon.speedIV) * self.opponentPokemon.level
+                self.opponentPokemon.defenseIV + self.opponentPokemon.speedIV) * self.opponentPokemon.level * 6
 
             gStateStack:push(BattleMessageState('You earned ' .. tostring(exp) .. ' experience points!',
                 function() end, false))
@@ -199,7 +199,7 @@ function TakeTurnState:victory()
                     [self.battleState.playerExpBar] = {value = math.min(self.playerPokemon.currentExp + exp, self.playerPokemon.expToLevel)}
                 })
                 :finish(function()
-                    
+
                     -- pop exp message off
                     gStateStack:pop()
 
@@ -207,16 +207,35 @@ function TakeTurnState:victory()
 
                     -- level up if we've gone over the needed amount
                     if self.playerPokemon.currentExp > self.playerPokemon.expToLevel then
-                        
+
                         gSounds['levelup']:play()
 
                         -- set our exp to whatever the overlap is
                         self.playerPokemon.currentExp = self.playerPokemon.currentExp - self.playerPokemon.expToLevel
-                        self.playerPokemon:levelUp()
+                        local hpInc, attackInc, defInc, speedInc = self.playerPokemon:levelUp()
+                        local statItemList = {
+                            {
+                                text = 'HP: ' .. self.playerPokemon.HP .. ' + ' .. hpInc .. ' = ' .. self.playerPokemon.HP + hpInc
+                            },
+                            {
+                                text = 'Attack: ' .. self.playerPokemon.attack .. ' + ' .. attackInc .. ' = ' .. self.playerPokemon.attack + attackInc
+                            },
+                            {
+                                text = 'Defense: ' .. self.playerPokemon.defense.. ' + ' .. defInc .. ' = ' .. self.playerPokemon.defense + defInc
+                            },
+                            {
+                                text = 'Speed: ' .. self.playerPokemon.speed.. ' + ' .. speedInc .. ' = ' .. self.playerPokemon.speed + speedInc
+                            }
+                        }
 
                         gStateStack:push(BattleMessageState('Congratulations! Level Up!',
                         function()
-                            self:fadeOutWhite()
+                            gStateStack:push(
+                                BattleLevelUpState({
+                                    statItems = statItemList,
+                                    onClose = self.fadeOutWhite
+                                })
+                            )
                         end))
                     else
                         self:fadeOutWhite()
@@ -231,13 +250,13 @@ function TakeTurnState:fadeOutWhite()
     -- fade in
     gStateStack:push(FadeInState({
         r = 255, g = 255, b = 255
-    }, 1, 
+    }, 1,
     function()
 
         -- resume field music
         gSounds['victory-music']:stop()
         gSounds['field-music']:play()
-        
+
         -- pop off the battle state
         gStateStack:pop()
         gStateStack:push(FadeOutState({
